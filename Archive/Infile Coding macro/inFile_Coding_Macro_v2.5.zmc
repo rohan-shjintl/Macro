@@ -1,0 +1,815 @@
+Sub zmain()
+
+
+Dim x,disp_box,PrimaryAddressNo,y,suffix,preDirectional,streetName
+Dim counter, flag
+
+Dim Address(10)
+Dim PrimaryAddr(10)
+Dim Zipcode_1(10)
+Dim Zipcode_2(10)
+Dim Address_comp(10)
+Dim primaryHigh(10)
+Dim primaryLow(10)
+msgbox "macro starts"
+  
+'USE THE LICENSE KEY IN CASE WE GET INVALID KEY 
+'LicenseKey=""
+LicenseKey="474208d0-90bc-488d-933b-23fedf3d12fd"
+
+'Set the excel application variable
+set xlApp = CreateObject("Excel.Application")
+'Make it visible, or hide it in the background
+xlApp.Application.Visible = true
+'Open a WilsonReport workbook
+set xlWB = xlApp.Workbooks.Open("C:\Users\user\Desktop\Wilson Report.xlsx")
+xlWB.Activate
+'countSheet = xlWB.Sheets.Count
+Set currentWorkSheet = xlApp.ActiveWorkbook.Worksheets(1)
+
+countrows= currentWorkSheet.UsedRange.Rows.Count
+
+Set Cells = currentWorksheet.Cells
+
+top   = currentWorksheet.UsedRange.Row
+first = currentWorksheet.UsedRange.Column
+
+'sets the column values for the address fields
+addrCol = first + 4
+cityCol = first + 5
+stCol   = first + 6
+zipCol  = first + 7
+zip2Col = first + 8
+LatCol  = first + 9
+LngCol  = first + 10
+
+Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+objXMLDoc.async = false
+
+'checks for each record till the data reaches 2500 .i.e. change in ip required
+'For i = 2 to 2501
+  For i = 1 to 8
+  'get adderss from file
+  Address2 = Cells(i,addrCol).Value 
+  City     = Cells(i,cityCol).Value 
+  State    = Cells(i,stCol).Value 
+  ZipCode  = Cells(i,zipCol).Value 
+  LatVal   = Cells(i,LatCol).Value
+  LngVal   = Cells(i,LngCol).Value
+  'ZipCode2 = Cells(i,addrCol).Value 
+  
+
+  'RETURNS THE XML RESPONSE FOR THE ABOVE ADDRESS DETAILS FROM THE SCREEN 
+  xmlData = cdyne(LicenseKey,Address2,City,State,ZipCode)
+
+  'SETUP THE XML RESPONSE IN DOM MODEL TO READ THE DATA WITHIN THE TAGS
+  objXMLDoc.loadXML(xmlData)
+
+  
+  'EXTRACT THE RETURN CODE, PRIMARY AND SECONDARY ADDRESS FROM THE CDYNE RESPONSE     
+  Set Root = objXMLDoc.documentElement
+  Set rc = Root.getElementsByTagName("ReturnCode")(0)                                        
+  
+  Set pdl = Root.getElementsByTagName("PrimaryDeliveryLine")(0)
+  Address2_n = pdl.text
+  Address2_n = UCase(Address2_n)
+
+  Set sdl = Root.getElementsByTagName("SecondaryDeliveryLine")(0)
+  Address2_n_sec = sdl.text
+
+  'TO MODIFY THE ADDRESS LINE ACCORDING TO THE ACCEPTABLE FORMAT OF GOOGLE AND BING
+  AddressLineGoogle = Replace(Address2_n," ","+")
+  AddressLineGoogle_scr = Replace(Address2," ","+")
+
+  'EXTRACT THE CITY, STATE, ZIPCODE FROM THE CDYNE RESPONSE
+  Set sa = Root.getElementsByTagName("StateAbbreviation")(0)
+  State_n = sa.text
+  State_n = Ucase(State_n)
+  Set pcn = Root.getElementsByTagName("PreferredCityName")(0)
+  City_n = pcn.text
+  City_n = Ucase(City_n)
+
+  
+
+  'SETUP THE ADDRESS URL TO QUERY GOOGLE AND BING TO FETCH THE LAT/LNG'S
+  AddressURLgoogle = AddressLineGoogle+"+"+City_n+"+"+State_n
+  AddressURLgoogle_scr = AddressLineGoogle_scr+"+"+City+"+"+State
+
+  'calculates the column for below values
+  
+  xlWB.Unprotect    
+  
+  Select Case rc.text 
+    Case "1"
+      'Invalid input 
+      rcvalid = 0
+      currentWorksheet.Cells(i,18).Value = "N"
+
+      Coordinates = LatLng(AddressURLgoogle)
+      MyArray = Split(Coordinates, ",", -1, 1)
+      Latitude= MyArray(0)
+      Longitude = MyArray(1)
+      LatLngok = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+      
+      IF LatLngok = 1 THEN
+         currentWorksheet.Cells(i,19).Value = "Y"
+      else
+         currentWorksheet.Cells(i,19).Value = "U"
+         currentWorksheet.Cells(i,10).Value = Latitude
+         currentWorksheet.Cells(i,11).Value = Longitude
+      End If
+
+    Case "2"
+      'Invalid License Key
+      currentWorksheet.Cells(i,18).Value = "I"
+      rcvalid = 0
+      Coordinates = LatLng(AddressURLgoogle,AddressURLbing)
+      MyArray = Split(Coordinates, ",", -1, 1)
+      Latitude= MyArray(0)
+      Longitude = MyArray(1)
+      LatLngok = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+      
+      IF LatLngok = 1 THEN
+         currentWorksheet.Cells(i,19).Value = "Y"
+      else
+         currentWorksheet.Cells(i,19).Value = "U"
+         currentWorksheet.Cells(i,10).Value = Latitude
+         currentWorksheet.Cells(i,11).Value = Longitude
+      End If
+
+    Case "10"
+      'Input Address is not found
+      rcvalid = 0
+      currentWorksheet.Cells(i,18).Value = "N"
+      Coordinates = LatLng(AddressURLgoogle)
+      MyArray = Split(Coordinates, ",", -1, 1)
+      Latitude= MyArray(0)
+      Longitude = MyArray(1)
+      LatLngOK= LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+
+      IF LatLngok = 1 THEN
+         currentWorksheet.Cells(i,19).Value = "Y"
+      else
+         currentWorksheet.Cells(i,19).Value = "U"
+         currentWorksheet.Cells(i,10).Value = Latitude
+         currentWorksheet.Cells(i,11).Value = Longitude
+      End If
+      
+    Case "100"
+      rcvalid = 1      
+    Case "101" 
+      rcvalid = 1
+    Case "102"     
+      rcvalid = 2
+    Case "103"     
+      rcvalid = 2
+    Case Else
+      'Unknown return code
+      rcvalid = 0
+      currentWorksheet.Cells(i,18).Value = rc.text
+      Coordinates = LatLng(AddressURLgoogle)
+      MyArray = Split(Coordinates, ",", -1, 1)
+      Latitude= MyArray(0)
+      Longitude = MyArray(1)
+      LatLngok = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+      IF LatLngok = 1 THEN
+         currentWorksheet.Cells(i,19).Value = "Y"
+      else
+         currentWorksheet.Cells(i,19).Value = "U"
+         currentWorksheet.Cells(i,10).Value = Latitude
+         currentWorksheet.Cells(i,11).Value = Longitude
+      End If
+      
+  End Select
+  'Gets the Zipcode from the Preferred Address 
+  If rc.text=102 or rc.text=103 Then
+
+    Set NodeList = Root.getElementsByTagName("ZipCode")
+    Zip_num=0
+    For Each Elem In NodeList 
+       Zip_num= Zip_num + 1
+    Next  
+    Set Root = objXMLDoc.documentElement 
+    Set zc = Root.getElementsByTagName("ZipCode")(Zip_num-1)
+    Zipcode_n = Left(zc.text,5)
+    Zipcode_disp = zc.text
+    If Len(zc.text)=5 THEN
+      Zipcode_n1=zc.text
+      Zipcode_n2=""
+    Else
+      MyArray1 = Split(Zipcode_disp,"-", -1, 1)
+      Zipcode_n1= MyArray1(0)
+      Zipcode_n2= MyArray1(1)
+    End If
+  Else
+    Set zc = Root.getElementsByTagName("ZipCode")(0)
+    Zipcode_n = Left(zc.text,5)
+    Zipcode_disp = zc.text
+    If Len(zc.text)=5 THEN
+      Zipcode_n1=zc.text
+      Zipcode_n2=""
+    Else
+      MyArray1 = Split(Zipcode_disp,"-", -1, 1)
+      Zipcode_n1= MyArray1(0)
+      Zipcode_n2= MyArray1(1)
+    End If
+  End If   
+  
+  'TO HANDLE THE NO. OF VALID ADDRESSES RETURNED FROM THE CDYNE
+  '0 - NO ADDRESS RETURNED.
+  '1 - SINGLE ADDRESS RETURNED. ADDRESS MATCHES PROCEED WITH LAT/LNG'S. IF NOT DISPLAY THE CORRECTED ADDRESS, 
+  '2 - ADDRESSES RETURNED WITH MULTIPLE ADDRESS TAG/S. HANDLED IN THE CASEMULTIPLE LOGIC.
+  Select Case rcvalid
+    Case 1
+      'COMPARE THE ADDRESS IN THE FILE WITH THE CDYNE ADDRESS
+      result_compare_addr=StrComp(Address2,Address2_n,1)
+      result_compare_city=StrComp(City,City_n,1)
+      result_compare_state=StrComp(State,State_n,1)
+      result_compare_zip1=StrComp(Zipcode,Zipcode_n1,1)
+      'result_compare_zip2=StrComp(ZipCode2,Zipcode_n2,1)
+
+      If (result_compare_addr = 0) And (result_compare_city = 0) And (result_compare_state = 0) And (result_compare_zip1 = 0) Then 
+      '(result_compare_zip2 = 0) Then
+      
+        currentWorksheet.Cells(i,18).Value = "U"
+
+        Coordinates = LatLng(AddressURLgoogle)
+        MyArray = Split(Coordinates, ",", -1, 1)
+        Latitude= MyArray(0)
+        Longitude = MyArray(1)
+
+
+        'UPDATES THE LAT/LNG'S ON THE SCREEN  
+        LatLngOK = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+
+        IF LatLngok = 1 THEN
+         currentWorksheet.Cells(i,19).Value = "Y"
+        else
+         currentWorksheet.Cells(i,19).Value = "U"
+         currentWorksheet.Cells(i,10).Value = Latitude
+         currentWorksheet.Cells(i,11).Value = Longitude
+        End If
+       
+      Else 
+          'UPDATES THE ADDRESS ON THE FILE
+          'call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2)
+          'msgbox Address2_n
+          currentWorksheet.Cells(i,5).Value = Address2_n
+          currentWorksheet.Cells(i,6).Value = City_n
+          currentWorksheet.Cells(i,7).Value = State_n
+          currentWorksheet.Cells(i,8).Value = Zipcode_n1
+          currentWorksheet.Cells(i,9).Value = Zipcode_n2
+
+          currentWorksheet.Cells(i,18).Value = "Y"
+
+          Coordinates = LatLng(AddressURLgoogle)
+          MyArray = Split(Coordinates, ",", -1, 1)
+          Latitude= MyArray(0)
+          Longitude = MyArray(1)
+
+          'UPDATES THE LAT/LNG'S IN THE FILE
+          LatLngOK = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+
+          IF LatLngok = 1 THEN
+            currentWorksheet.Cells(i,19).Value = "Y"
+          Else
+            currentWorksheet.Cells(i,19).Value = "U"
+            currentWorksheet.Cells(i,10).Value = Latitude
+            currentWorksheet.Cells(i,11).Value = Longitude
+          End If
+      End If
+    Case 2
+      'RCMULTIPLE - 0 --> EXIT THE MACRO
+      'RCMULTIPLE - 1 --> SINGLE ADDRESS IS RETURNED
+      'RCMULTIPLE - 2 --> MULTIPLE ADDRESSES ARE RETURNED
+      
+      currentWorksheet.Cells(i,18).Value = "C"
+      'msgbox xmlData
+      Address2_n = UCase(Address2_n)
+      City_n = UCase(City_n)
+      State_n = Ucase(State_n)
+  
+      'INITIALIZE COUNTER
+      x=1
+      y=1
+      'SETUP THE XML RESPONSE IN DOM MODEL TO READ THE DATA WITHIN THE TAGS
+
+      Set NodeList = Root.getElementsByTagName("AddressInfo")
+      
+      Address2_n = UCase(Address2_n)
+      City_n = UCase(City_n)
+      State_n = Ucase(State_n)
+
+      'GET EACH ADDRESS
+      For Each Elem In NodeList 
+        Flag = 0
+        'msgbox "Address Number: " & x
+        Set PH = Elem.getElementsByTagName("PrimaryHigh")(0)
+        Set PL = Elem.getElementsByTagName("PrimaryLow")(0)
+        Set Suffix = Elem.getElementsByTagName("Suffix")(0)
+        Set PreDirectional = Elem.getElementsByTagName("PreDirectional")(0)
+        Set StreetName = Elem.getElementsByTagName("StreetName")(0)
+        Set Zip = Elem.getElementsByTagName("ZipCode")(0)
+
+        primaryHigh(x) = PH.text
+        primaryLow(x) = PL.text
+        'CONVERT INFO TO UPPER CASE
+        suffix = UCase(Suffix.text)
+        preDirectional = UCase(PreDirectional.text)
+        streetName= UCase(StreetName.text)
+      
+        'ADD TO ARRAY
+        If Len(Zip.text)=5 THEN
+          Zipcode_1(x)=Zip.text
+          Zipcode_2(x)=""
+        Else
+          MyArray1 = Split(Zip,"-", -1, 1)
+          Zipcode_1(x)= MyArray1(0)
+          Zipcode_2(x)= MyArray1(1)
+        End If
+        PrimaryAddressNo = primaryHigh(x)
+    
+        Address_comp(x)= PrimaryAddressNo+" "+preDirectional+" "+streetName+" "+suffix 
+        aDDRESS_TEMP =Address_comp(x)
+        'msgbox aDDRESS_TEMP
+        Address_comp(x)= Replace(Address_comp(x),"  "," ")
+        'Check 1 - Elminates the Range interpolated Address if any  
+        IF Cint(primaryHigh(x)) <> Cint(primaryLow(x)) Then
+          ' do nothing
+        Else
+          'Check 2 - Compares Each Address in the XML with the Preferred Address
+      
+          IF Address_comp(x) = Address2_n then
+          'and Zipcode_1(x) = Zipcode_n1 and Zipcode_2(x)=Zipcode_n2 then
+            flag = 1
+          Else
+            For counter = 2 to y
+              IF Address_comp(counter) = Address_comp(y)  then
+              'and Zipcode_1(counter) = Zipcode_1(y) and Zipcode_2(counter) = Zipcode_2(y) then
+                 flag = 1
+              END IF
+            Next
+          End IF 
+      
+          If flag = 1 Then
+          'DO NOT DISPLAY IT IS SAME
+          Else
+            y=y+1
+            PrimaryAddr(y) = PrimaryAddressNo+" "+preDirectional+" "+streetName+" "+suffix
+            Do While (InStr(PrimaryAddr(y), "  "))
+              PrimaryAddr(y)= Replace(PrimaryAddr(y),"  "," ")
+            Loop
+            y=Left(y,1)
+          End If 
+        End If
+        x=x+1
+      Next 
+      If y=1 Then
+        rcmultiple = 1
+      Else 
+        Select Case y
+          Case 2
+            currentWorksheet.Cells(i,20).Value = Address2_n
+            currentWorksheet.Cells(i,21).Value = PrimaryAddr(2)
+          Case 3
+            currentWorksheet.Cells(i,20).Value = Address2_n
+            currentWorksheet.Cells(i,21).Value = PrimaryAddr(2)
+            currentWorksheet.Cells(i,22).Value = PrimaryAddr(3)
+          Case 4
+            currentWorksheet.Cells(i,20).Value = Address2_n
+            currentWorksheet.Cells(i,21).Value = PrimaryAddr(2)
+            currentWorksheet.Cells(i,22).Value = PrimaryAddr(3)
+            currentWorksheet.Cells(i,23).Value = PrimaryAddr(4)
+        End Select
+          
+        currentWorksheet.Cells(i,6).Value = City_n
+        currentWorksheet.Cells(i,7).Value = State_n
+        currentWorksheet.Cells(i,8).Value = Zipcode_n1
+        currentWorksheet.Cells(i,9).Value = Zipcode_n2
+
+        Coordinates = LatLng(AddressURLgoogle)
+        MyArray = Split(Coordinates, ",", -1, 1)
+        Latitude= MyArray(0)
+        Longitude = MyArray(1)
+        If Longitude < 0 Then 
+        Longitude = -(Longitude)
+        End If
+        
+        'UPDATES THE LAT/LNG'S ON THE SCREEN  
+        LatLngOK = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+
+        IF LatLngok = 1 THEN
+          currentWorksheet.Cells(i,19).Value = "Y"
+        Else
+          currentWorksheet.Cells(i,19).Value = "U"
+          currentWorksheet.Cells(i,10).Value = Latitude
+          currentWorksheet.Cells(i,11).Value = Longitude
+        End If
+        rcmultiple = 2 
+      End If
+  
+      Select Case rcmultiple
+      Case 1
+        result_compare_addr=StrComp(Address2,Address2_n,1)
+        result_compare_city=StrComp(City,City_n,1)
+        result_compare_state=StrComp(State,State_n,1)
+        result_compare_zip1=StrComp(Zipcode,Zipcode_n1,1)
+        'result_compare_zip2=StrComp(Zipcode2,Zipcode_n2,1)
+
+        If (result_compare_addr = 0) And (result_compare_city = 0) And (result_compare_state = 0) And (result_compare_zip1 = 0) Then
+
+          currentWorksheet.Cells(i,18).Value = "U"
+          'FETCHES LAT/LNG'S FROM GOOGLE/BING SPLIT THE VALUE RETURNED FROM LatLng FUNCTION INTO SEPARATE VARIABLES 
+          Coordinates = LatLng(AddressURLgoogle)
+          MyArray = Split(Coordinates, ",", -1, 1)
+          Latitude= MyArray(0)
+          Longitude = MyArray(1)
+
+          'UPDATES THE LAT/LNG'S ON THE SCREEN  
+          LatLngOK = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+
+          IF LatLngok = 1 THEN
+            currentWorksheet.Cells(i,19).Value = "Y"
+          Else
+            currentWorksheet.Cells(i,19).Value = "U"
+            currentWorksheet.Cells(i,10).Value = Latitude
+            currentWorksheet.Cells(i,11).Value = Longitude
+          End If
+          'CHECKS FOR THE UPDATES OF LAT/LNG'S AND THE ADDRESS ON THE SCREEN
+        Else  
+            'call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2)
+            currentWorksheet.Cells(i,5).Value = Address2_n
+            currentWorksheet.Cells(i,6).Value = City_n
+            currentWorksheet.Cells(i,7).Value = State_n
+            currentWorksheet.Cells(i,8).Value = Zipcode_n1
+            currentWorksheet.Cells(i,9).Value = Zipcode_n2
+
+            currentWorksheet.Cells(i,18).Value = "Y"
+            'FETCHES LAT/LNG'S FROM GOOGLE/BING SPLIT THE VALUE RETURNED FROM LatLng FUNCTION INTO SEPARATE VARIABLES 
+            Coordinates = LatLng(AddressURLgoogle)
+            MyArray = Split(Coordinates, ",", -1, 1)
+            Latitude= MyArray(0)
+            Longitude = MyArray(1)
+            'UPDATES THE LAT/LNG'S ON THE SCREEN
+            LatLngOK = LatLongUpdate(Latitude,Longitude,LatVal,LngVal)
+
+          IF LatLngok = 1 THEN
+            currentWorksheet.Cells(i,19).Value = "Y"
+          Else
+            currentWorksheet.Cells(i,19).Value = "U"
+            currentWorksheet.Cells(i,10).Value = Latitude
+            currentWorksheet.Cells(i,10).Value = Longitude
+          End If
+        End If  
+      Case 2
+          'do nothing
+      End Select
+    
+  End Select  
+  Next
+  msgbox "macro ends"
+  'xlWB.Save
+  'xlWB.Close
+End Sub
+
+
+'----------------------------------END OF CODE---------------------------------------------------------
+'------------------------------FUNTIONS STARTS HERE----------------------------------------------------
+
+'RETURNS THE RESPONSE FROM CDYNE FOR THE ADDRESS ON THE SCREEN
+Function cdyne(LKey,Addr,city,state,zip)
+  Dim cXML, oXMLHttp
+
+  'SEND THE ABOVE DETAILS TO QUERY CDYNE AND FETCH THE CORRECTED DETAILS.
+ 
+  cXML =  "<PavRequest xmlns=""pav3.cdyne.com"">" & _
+          "<CityName>"+city+"</CityName>" & _
+          "<FirmOrRecipient></FirmOrRecipient>" & _
+          "<LicenseKey>"+LKey+"</LicenseKey>" & _
+          "<PrimaryAddressLine>"+Addr+"</PrimaryAddressLine>" & _
+          "<ReturnCaseSensitive>true</ReturnCaseSensitive>" & _
+          "<ReturnCensusInfo>true</ReturnCensusInfo>" & _
+          "<ReturnCityAbbreviation>true</ReturnCityAbbreviation>" & _
+          "<ReturnGeoLocation>true</ReturnGeoLocation>" & _
+          "<ReturnLegislativeInfo>true</ReturnLegislativeInfo>" & _
+          "<ReturnMailingIndustryInfo>true</ReturnMailingIndustryInfo>" & _
+          "<ReturnResidentialIndicator>true</ReturnResidentialIndicator>" & _
+          "<ReturnStreetAbbreviated>true</ReturnStreetAbbreviated>" & _
+          "<SecondaryAddressLine></SecondaryAddressLine>" & _
+          "<State>"+state+"</State>" & _
+          "<Urbanization></Urbanization>" & _
+          "<ZipCode></ZipCode>" & _
+          "</PavRequest>"
+
+  'SEND THE XML REQUEST TO CDYNE
+  Set oXMLHttP = CreateObject("Microsoft.XMLHTTP")
+  Call oXMLHttp.Open("POST", "http://pav3.cdyne.com/PavService.svc/VerifyAddressAdvanced", False)
+  Call oXMLHttp.setRequestHeader("Content-Type", "text/xml")        
+  Call oXMLHttp.send(cXML)
+
+  'CHECK WHETHER WE GOT ANY RESPONSE FROM THE XML REQUEST
+  If oXMLHttp.Status = 200 Then
+    cdyne = oXMLHttp.responseText
+  End If
+
+  Set oXMLHttP = nothing
+End Function
+
+Function caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2,Address2)
+  
+  'CONVERT ADDRESS TO UPPER CASE
+  
+
+  'GET EACH ADDRESS
+  For Each Elem In NodeList 
+    Flag = 0
+    'msgbox "Address Number: " & x
+    Set PH = Elem.getElementsByTagName("PrimaryHigh")(0)
+    Set PL = Elem.getElementsByTagName("PrimaryLow")(0)
+    Set Suffix = Elem.getElementsByTagName("Suffix")(0)
+    Set PreDirectional = Elem.getElementsByTagName("PreDirectional")(0)
+    Set StreetName = Elem.getElementsByTagName("StreetName")(0)
+    Set Zip = Elem.getElementsByTagName("ZipCode")(0)
+
+      primaryHigh(x) = PH.text
+      primaryLow(x) = PL.text
+      'CONVERT INFO TO UPPER CASE
+      suffix = UCase(Suffix.text)
+      preDirectional = UCase(PreDirectional.text)
+      streetName= UCase(StreetName.text)
+      
+      'ADD TO ARRAY
+      If Len(Zip.text)=5 THEN
+        Zipcode_1(x)=Zip.text
+        Zipcode_2(x)=""
+      Else
+        MyArray1 = Split(Zip,"-", -1, 1)
+        Zipcode_1(x)= MyArray1(0)
+        Zipcode_2(x)= MyArray1(1)
+      End If
+      PrimaryAddressNo = primaryHigh(x)
+    
+      Address_comp(x)= PrimaryAddressNo+" "+preDirectional+" "+streetName+" "+suffix 
+      aDDRESS_TEMP =Address_comp(x)
+      'msgbox aDDRESS_TEMP
+      Address_comp(x)= Replace(Address_comp(x),"  "," ")
+     'msgbox "address"&x &": "& Address_comp(x) 
+      'msgbox "PREFERRED: "& Address2_n&" "&Zipcode_n1 & " Before Change: "&aDDRESS_TEMP&" AFTER Change: "& Address_comp(x)
+    
+    'Check 1 - Elminates the Range interpolated Address if any  
+    IF Cint(primaryHigh(x)) <> Cint(primaryLow(x)) Then
+      ' do nothing
+      'msgbox "address" & x & "elminated- RANGE_INTERPOLATED"
+    Else
+      'Check 2 - Compares Each Address in the XML with the Preferred Address
+      
+      IF Address_comp(x) = Address2_n and Zipcode_1(x) = Zipcode_n1 and Zipcode_2(x)=Zipcode_n2 then
+          flag = 1
+      'msgbox "address" & x & "elminated- Pref add match"
+      Else
+        For counter = 2 to y
+          IF Address_comp(counter) = Address_comp(y) and Zipcode_1(counter) = Zipcode_1(y) and Zipcode_2(counter) = Zipcode_2(y) then
+             'msgbox "counter: "& counter& "vs y : "& y
+            flag = 1
+          END IF
+        Next
+      End IF 
+      
+      If flag = 1 Then
+        'DO NOT DISPLAY IT IS SAME
+      Else
+        y=y+1
+        'DISPLAY IN INPUT BOX
+        Address(y) = PrimaryAddressNo+" "+preDirectional+" "+streetName+" "+Suffix+" "+City_n+", "+State_n+" "+Zip.text
+        
+        Do While (InStr(Address(y), "  "))
+          Address(y)= Replace(Address(y),"  "," ")
+      Loop
+
+        'SEND TO GOOGLE API
+        PrimaryAddr(y) = PrimaryAddressNo+" "+preDirectional+" "+streetName+" "+suffix
+
+        Do While (InStr(PrimaryAddr(y), "  "))
+          PrimaryAddr(y)= Replace(PrimaryAddr(y),"  "," ")
+      Loop
+        'INCREMENT THE COUNTER
+        'PROBLEM CODE -- NEED TO FIX BEFORE PUTTING IN PRODUCTION
+        y=Left(y,1)
+        
+        Addresses = Addresses+","+Address(y)
+        
+      End If 
+    End If
+    x=x+1
+  Next 
+
+  If y=1 Then
+    'THERE IS NOTHING IN THE UNIQUE ARRAY
+    caseMultiple = 1
+  Else If y>1 then
+    'dipslay the preffered address 
+    'display the elements in the unique ARRAY    
+       
+    call caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2,Address2)
+    If resp = 1 Then
+            'call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2)
+            currentWorksheet.Cells(i,5).Value = Address2_n
+            currentWorksheet.Cells(i,6).Value = City_n
+            currentWorksheet.Cells(i,7).Value = State_n
+            currentWorksheet.Cells(i,8).Value = Zipcode_n1
+            currentWorksheet.Cells(i,9).Value = Zipcode_n2
+
+    Else 
+          'IF ANY VALID INPUT OTHER THAN 1 IS SELECTED
+          IF (resp-y)<= 0 AND resp > 0 Then
+            Address2_n = PrimaryAddr(resp)
+            Zipcode_n1 = Zipcode_1(resp)
+            Zipcode_n2 = Zipcode_2(resp)
+            'call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2)
+            currentWorksheet.Cells(i,5).Value = Address2_n
+            currentWorksheet.Cells(i,6).Value = City_n
+            currentWorksheet.Cells(i,7).Value = State_n
+            currentWorksheet.Cells(i,8).Value = Zipcode_n1
+            currentWorksheet.Cells(i,9).Value = Zipcode_n2
+            End If
+    End If
+        caseMultiple = 2
+    ''  End If 
+    ' End If 
+  End If
+  End If  
+  Set objDoc = Nothing  
+  Erase Address
+  Erase PrimaryAddr
+  Erase Zipcode_1
+  Erase Zipcode_2
+  Erase Address_comp
+  Erase primaryHigh
+  Erase primaryLow   
+End Function
+'----------------------------------------------------------------------------------------------------------------'
+'FETCHES GEOLOCATION FROM THE GOOGLE, IF NOT FROM GOOGLE THEN FROM BING 
+Function LatLng (AddressURLgoogle)
+
+  Dim BaseURL, FinalURL
+  Dim xmlRequest, xmlData, latPos, lat, lngPos, lng, pos, loctype, loc, todayOnly, statstrt, statend, stat, ret, operator
+  Dim matchType, partMatch, partMatchStrt, partMatchEnd, resStrt, resEnd, resData
+
+    'PART OF URL THAT HITS THE GOOGLE SERVERS TO GET LAT/LNG
+    BaseURL = "https://maps.googleapis.com/maps/api/geocode/xml?address="
+
+  
+    'GENERATING THE ENTIRE URL WITH ADDRESS IN IT    
+    FinalURL = BaseURL+AddressURLgoogle
+
+    'SETTING UP THE GET REQUEST TO WEB FOR A CONNECTION         
+    Set xmlRequest = CreateObject("MSXML2.XMLHTTP")
+    xmlRequest.open "GET", FinalURL, False
+    xmlRequest.send
+
+    ' IF THE CONNECTION IS GOOD THEN ONLY FETCH DATA
+    If xmlRequest.Status = 200 Then
+        xmlData = xmlRequest.responseText
+        ' FETCHING THE STATUS OF THE ADDRESS THAT WAS QUERIED
+        statstrt = InStr(1, xmlData, "<status>")
+        statend = InStr(1, xmlData, "</status>")
+        stat = Mid(xmlData,statstrt+8,statend-(statstrt+8))
+       
+        ' IF THE STATUS IS OK I.E. THE ADDRESS WAS SUCCESSFULLY PARSED THEN FETCH AND PUT THE LAT AND LNG 
+          ' OTHERWISE SKIP THAT RECORD
+        If stat = "OK" Then
+        ' TAKING OUT ONLY THE FIRST RESULT FROM THE XML RETURNED FOR THE ADDRESS SENT AND USING IT FURTHER AS A BASE
+            resStrt = InStr(1, xmlData, "<result>")
+            resEnd  = InStr(1, xmlData, "</result>")
+            resData = Mid(xmlData,resStrt+8,resEnd-(resStrt+8))
+        
+
+            latPos = InStr(1, resData, "<lat>")
+            lngPos = InStr(1, resData, "<lng>")
+            loctype = InStr(1,resData,"<location_type>")
+            locEndType = InStr(1,resData,"</location_type>")
+            lat = Mid(resData, latPos+5, 8)
+            lng = Mid(resData, lngPos+5, 10)
+            loc = Mid(resData, loctype+15,locEndType-(loctype+15))
+            todayOnly = ""
+
+        ' DEPENDING ON THE LOCATION TYPE FOR THE ADDRESS RETURNED PUT IN AN INDICATOR IN THE "TODAY ONLY" FIELD   
+        ' LOCATION_TYPE STORES ADDITIONAL DATA ABOUT THE SPECIFIED LOCATION. THE FOLLOWING VALUES ARE CURRENTLY SUPPORTED:
+        '
+        '   -> "ROOFTOP" INDICATES THAT THE RETURNED RESULT IS A PRECISE GEOCODE FOR WHICH WE HAVE LOCATION INFORMATION ACCURATE DOWN TO
+        '        STREET ADDRESS PRECISION.
+        '   -> "RANGE_INTERPOLATED" INDICATES THAT THE RETURNED RESULT REFLECTS AN APPROXIMATION (USUALLY ON A ROAD) INTERPOLATED BETWEEN 
+        '        TWO PRECISE POINTS (SUCH AS INTERSECTIONS). INTERPOLATED RESULTS ARE GENERALLY RETURNED WHEN ROOFTOP GEOCODES ARE UNAVAILABLE
+        '        FOR A STREET ADDRESS.
+        '   -> "GEOMETRIC_CENTER" INDICATES THAT THE RETURNED RESULT IS THE GEOMETRIC CENTER OF A RESULT SUCH AS A POLYLINE (FOR EXAMPLE, 
+        '        A STREET) OR POLYGON (REGION).
+        '   -> "APPROXIMATE" INDICATES THAT THE RETURNED RESULT IS APPROXIMATE.
+
+         
+            Select Case loc
+                Case "ROOFTOP"
+                    todayOnly = " "
+                Case "RANGE_INTERPOLATED"
+                    todayOnly = "R"
+                Case "GEOMETRIC_CENTER"
+                    todayOnly = "G"
+                Case "APPROXIMATE"
+                    todayOnly = "A"
+                Case else
+                   msgbox "Unknown Error"
+            End Select
+       
+        ' CHECK FOR PARTIAL MATCH TAG
+            partMatchStrt = InStr(1, resData, "<partial_match>")
+            partMatchEnd = InStr(1, resData, "</partial_match>")
+                        
+            partMatch = ""
+        ' IF PARTIALMATCH TAG IS PRESENT THEN FETCH THE VALUE RETURNED FOR IT AND SET THE PARTMATCH TO 'P'  
+            If partMatchStrt > 0 and partMatchEnd > 0 then
+             
+                matchType = Mid(resData,partMatchStrt+15,partMatchEnd-(partMatchStrt+15))
+                IF matchType = "true" Then
+                    partMatch = "P" 
+                END If
+            End If
+
+        ' Sending the value for latitude, longitude, locationType and Partial Match Column over the screen        
+         
+            If todayOnly = "A" or todayOnly = "G"  Then
+                ' do nothing
+                LatLng = lat+","+lng
+            else                      
+                LatLng = lat+","+lng
+            End If  
+        Else
+            LatLng = " "+","+" "  
+            'LatLng = fetchLatLngbing(AddressURLbing)
+        End If
+    Else    
+        LatLng = " "+","+" "
+        'LatLng = fetchLatLngbing(AddressURLbing)
+    End If 
+
+End Function
+'----------------------------------------------------------------------------------------------------------------'
+Function CleanStringLatLng()
+  
+End Function
+'----------------------------------------------------------------------------------------------------------------'
+'MATCHES THE LAT/LNG'S FROM SCREEN TO ONES RETURENED FROM 'LatLng' FUNCTION
+Function GetLatLngScreen(Latmain,Latdec,Longmain,Longdec,LatVal,LngVal)
+
+  If (LatVal=0) or (LngVal=0) then
+    Latmainscr  = 0
+    Latdecscr   = 0
+    Longmainscr = 0
+    Longdecscr  = 0
+  Else  
+    LatSplit = Split(LatVal,".", -1, 1)
+    LngSplit = Split(LngVal,".", -1, 1)
+              
+    Latmainscr  = LatSplit(0)
+    Latdecscr   = LatSplit(1)
+    Longmainscr = LngSplit(0)
+    Longdecscr  = LngSplit(1)
+  End If  
+  '' TO BE REMOVED WHEN SCREEN ACCOMODATES 5 LENGTH VALUES
+  Latdec = Left (Latdec,5)
+  Longdec = Left (Longdec,5)
+
+  'LatLongUpdate = 0-->LAT/LNG'S NEEDS UPDATION
+  'LatLongUpdate = 1-->LAT/LNG'S MATCHES 
+  IF Latmain=Latmainscr and Latdec=Latdecscr and Longmain=Longmainscr and Longdec=Longdecscr Then
+    GetLatLngScreen = 1
+  Else
+    GetLatLngScreen = 0
+  End If 
+
+End Function
+'----------------------------------------------------------------------------------------------------------------'
+'UPDATES THE LAT/LNG'S ON THE SCREEN
+Function LatLongUpdate(lat,lng,LatVal,LngVal)
+
+  'call CleanStringLatLng()
+  MyLat = Split(lat,".", -1, 1)
+  MyLng = Split(lng,".", -1, 1)
+              
+  Latmain = MyLat(0)
+  Latdec = MyLat(1)
+  Longmain = MyLng(0)
+  Longdec = MyLng(1)
+
+  'CONVERTING LONGITUDES TO READABLE FORMAT
+  'If Len(Longmain) = 4 then
+  ''  Longmain = CStr(-Longmain)
+  'Else
+  ''  Longmain = "0"+CStr(-Longmain)
+  'End If 
+  
+
+  'COMPARE THE LAT/LNG FROM THE SCREEN 
+  'LatLongUpdate = 0-->LAT/LNG'S NEEDS UPDATION
+  'LatLongUpdate = 1-->LAT/LNG'S MATCHES 
+  LatLongUpdate = GetLatLngScreen(Latmain,Latdec,Longmain,Longdec,LatVal,LngVal)
+
+End Function

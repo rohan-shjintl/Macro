@@ -1,0 +1,45 @@
+Address2_n = PrimaryAddr(y)
+    Address_disp_ex = Address2_n&vbnewline+City_n+", "+State_n+" "+Zipcode_n
+
+    update_address = MsgBox("The updated address is -"&vbNewline+Address_disp_ex&vbNewline&vbNewline+"Press Yes to update the address"&vbNewline+"Press No to keep Original", vbYesNo, "Address Validation") 
+
+    Select Case update_address
+           
+    Case vbYes 
+    
+    call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n)
+    Address2_n=Replace(Address2_n,"  "," ")
+    AddressLineGoogle = Replace(Address2_n," ","+")
+    AddressLineBing = Replace(Address2_n," ","%20")
+    AddressURLbing= State_n+"/"+Zipcode_n+"/"+City_n+"/"+AddressLineBing
+    AddressURLgoogle = AddressLineGoogle+"+"+City_n+"+"+State_n
+
+    Coordinates = LatLng(AddressURLgoogle)
+    MyArray = Split(Coordinates, ",", -1, 1)
+    Latitude= MyArray(0)
+    Longitude = MyArray(1)
+
+    LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+    If LatLngOK = 1 Then
+      msgbox "Address has been updated and the lat/lng's are not updated."
+    Else
+      msgbox "Address and the lat/lng's have been updated." 
+    End If
+    
+    Case vbNo
+
+      Coordinates = LatLng(AddressURLgoogle_scr)
+      MyArray = Split(Coordinates, ",", -1, 1)
+      Latitude= MyArray(0)
+      Longitude = MyArray(1)
+      LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+      If LatLngOK = 1 Then
+        msgbox "Address and the lat/lng's are not updated."
+      Else
+        msgbox "Address not updated and the lat/lng's have been updated." 
+      End If
+    End Select
+
+    caseMultiple= 4  

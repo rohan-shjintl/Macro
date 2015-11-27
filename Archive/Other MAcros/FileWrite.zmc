@@ -1,0 +1,56 @@
+Sub ZMain()
+
+Dim cXML,result
+cXML = "<PavRequest xmlns=""pav3.cdyne.com"">" & _
+            "<LicenseKey>F909F317-AD8D-4439-9688-A862713D0EE1</LicenseKey>" & _
+            "<FirmOrRecipient></FirmOrRecipient>" & _
+            "<PrimaryAddressLine>1026 ANDREWS RUN</PrimaryAddressLine>" & _
+            "<SecondaryAddressLine></SecondaryAddressLine>" & _
+            "<CityName>HENDERSONV</CityName>" & _
+            "<State>TN</State>" & _
+            "<ZipCode>37075</ZipCode>" & _
+            "<Urbanization></Urbanization>" & _
+            "<ReturnCaseSensitive>true</ReturnCaseSensitive>" & _
+            "<ReturnCensusInfo>true</ReturnCensusInfo>" & _
+            "<ReturnCityAbbreviation>true</ReturnCityAbbreviation>" & _
+            "<ReturnGeoLocation>true</ReturnGeoLocation>" & _
+            "<ReturnLegislativeInfo>true</ReturnLegislativeInfo>" & _
+            "<ReturnMailingIndustryInfo>true</ReturnMailingIndustryInfo>" & _
+            "<ReturnResidentialIndicator>true</ReturnResidentialIndicator>" & _
+            "<ReturnStreetAbbreviated>true</ReturnStreetAbbreviated>" & _
+        "</PavRequest>"    
+ 
+Dim oXMLHTTP
+Set oXMLHTTP = CreateObject("Microsoft.XMLHTTP")
+Call oXMLHttp.Open("POST", "http://pav3.cdyne.com/PavService.svc/VerifyAddressAdvanced", False)
+Call oXMLHttp.setRequestHeader("Content-Type", "text/xml")        
+Call oXMLHttp.send(cXML)
+ 
+'Display response in a message box.
+
+result = MsgBox("Yes or No?", vbYesNo, "Yes No Example")
+
+Select Case result
+Case vbYes
+    MsgBox("You chose Yes")
+Case vbNo
+    MsgBox("You chose No")
+End Select
+
+ 
+'Write and save response to a text file.
+Const ForReading = 1, ForWriting = 2, ForAppending = 8
+Const TristateUseDefault = -2, TristateTrue = -1, TristateFalse = 0
+Dim fso, MyFile, FileName, TextLine
+Set fso = CreateObject("Scripting.FileSystemObject")
+FileName = "C:\Users\Rohan Dua\Desktop\output123.txt"
+Set MyFile = fso.OpenTextFile(FileName, ForWriting, True)
+MyFile.WriteLine oXMLHttp.responseText
+MyFile.Close
+Set MyFile = fso.OpenTextFile(FileName, ForReading)
+Do While MyFile.AtEndOfStream <> True
+TextLine = MyFile.ReadLine
+Loop
+MyFile.Close
+
+End Sub

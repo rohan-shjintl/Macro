@@ -1,0 +1,33 @@
+Sub Zmain()
+
+xmlData = "Hello World"
+msgbox xmlData
+call WriteXMLInFile(xmlData)
+
+End Sub
+
+Function WriteXMLInFile(xmlData)
+msgbox "in File"
+Const ForReading = 1, ForWriting = 2, ForAppending = 8
+Const TristateUseDefault = -2, TristateTrue = -1, TristateFalse = 0
+Dim fso, MyFile, FileName, TextLine
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+set objFSO=CreateObject("Scripting.FileSystemObject")
+Set WSHshell = CreateObject("WScript.Shell")
+desktop = WSHShell.SpecialFolders("Desktop")
+'pathstring = objFSO.GetParentFolderName("\writeInAFile.zmc") 
+pathstring = objFSO.GetAbsolutePathName(desktop)
+msgbox pathstring
+
+FileName = pathstring+"\GetLAtLngFile\output1.txt"
+Set MyFile = fso.OpenTextFile(FileName, ForWriting, True)
+MyFile.WriteLine xmlData
+MyFile.Close
+Set MyFile = fso.OpenTextFile(FileName, ForReading)
+Do While MyFile.AtEndOfStream <> True
+TextLine = MyFile.ReadLine
+Loop
+MyFile.Close
+
+End Function

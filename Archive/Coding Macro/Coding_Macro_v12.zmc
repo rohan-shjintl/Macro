@@ -1,0 +1,817 @@
+Sub ZMain()
+
+  Dim CustomerName, Address2, City, State,LicenseKey ,responseText1, ZipCode, Address_disp ,Coordinates,update_latlong,update_geolocation,update_address,MyArray,Latitude,Longitude,addr
+  Dim xmlRequest,Addresses,xmlData, rcstrt, rcend, rc, ret, operator, statestrt, stateend, State_n, addrstrt, addrend, Address2_n, citystrt, cityend, City_n,zipstrt,zipend,Zipcode_n 
+  Dim AddressURLbing,AddressLineBing, AddressURLgoogle,AddressLineGoogle,rcupdate      
+              
+  LicenseKey="F909F317-AD8D-4439-9688-A862713D0EE1"
+  'LicenseKey=""
+  'Get the address, City, State, Zip from the screen for the current row.
+  Address2 = UCase(Trim(GetString (15,11,25)))
+  City = UCase(Trim(GetString (16,11,25)))
+  State = UCase(Trim(GetString (16,37,2)))
+  ZipCode = UCase(Trim(GetString (16,40,5)))
+
+  'Returns the XML response for the above Address details from the screen 
+  xmlData = cdyne(LicenseKey,Address2,City,State,ZipCode) 
+  
+  'Writes the XML response into an output File
+  call WriteXMLInFile(xmlData)
+
+  'Setup the XML response in DOM model to read the data within the tags
+  Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+  objXMLDoc.async = false
+  objXMLDoc.loadXML(xmlData)
+
+  'Extract the return code, primary and secondary Address from the cdyne response     
+  Set Root = objXMLDoc.documentElement
+  Set rc = Root.getElementsByTagName("ReturnCode")(0)
+                                             
+  
+  Set pdl = Root.getElementsByTagName("PrimaryDeliveryLine")(0)
+  Address2_n = pdl.text
+
+  Set sdl = Root.getElementsByTagName("SecondaryDeliveryLine")(0)
+  Address2_n_sec = sdl.text
+
+  'To modify the address line according to the acceptable format of google and Bing
+  AddressLineGoogle = Replace(Address2_n," ","+")
+  AddressLineBing = Replace(Address2_n," ","%20")
+  AddressLineGoogle_scr = Replace(Address2," ","+")
+  AddressLineBing_scr = Replace(Address2," ","%20")
+
+  'Extract the city, state, zipcode from the cdyne response
+  Set sa = Root.getElementsByTagName("StateAbbreviation")(0)
+  State_n = sa.text
+
+  Set pcn = Root.getElementsByTagName("PreferredCityName")(0)
+  City_n = pcn.text
+
+  Set zc = Root.getElementsByTagName("ZipCode")(0)
+  Zipcode_n = Left(zc.text,5)
+                                            
+  'Setup the address URL to query google and bing to fetch the lat/lng's
+  AddressURLgoogle = AddressLineGoogle+"+"+City_n+"+"+State_n
+  AddressURLbing= State+"/"+Zipcode+"/"+City+"/"+AddressLineBing
+  AddressURLgoogle_scr = AddressLineGoogle_scr+"+"+City+"+"+State
+  AddressURLbing_scr = State+"/"+Zipcode+"/"+City+"/"+AddressLineBing_scr
+  
+  'For displaying address on the Address Verification & Address Validation box
+  Address_disp = Address2_n&vbNewline+"    ("+Address2_n_sec+" )"&vbNewline+"    "+City_n+", "+State_n+" "+Zipcode_n
+  Address_disp_ex = Address2_n&vbNewline+"("+Address2_n_sec+" )"&vbNewline+City_n+", "+State_n+" "+Zipcode_n
+
+
+  'Error Handling for the various response codes from cdyne
+  Select Case rc.text 
+    Case "1"
+      msgbox "Invalid input"
+      rcvalid = 0
+    Case "2"
+      msgbox "Invalid License Key"
+      rcvalid = 0
+    Case "10"
+      msgbox "Input Address is not found"
+      rcvalid = 0
+    Case "100"
+      rcvalid = 1      
+    Case "101"
+      rcvalid = 1
+    Case "102"     
+      rcvalid = 2
+    Case "103"     
+      rcvalid = 2
+    Case Else
+      msgbox "Unknown return code"+rc.text
+      rcvalid = 0
+  End Select
+
+  'To handle the no. of valid addresses returned from the Cdyne
+  '0 - No Address Returned. Exit the Macro.
+  '1 - Single Address Returned. Address matches proceed with lat/lng's. If not display the corrected address, 
+  '    ask for the user's permission to update it, after that proceed fetching for the lat/lng's.
+  '2 - Addresses returned with Multiple Address tag/s. Handled in the caseMultiple Longic.
+  Select Case rcvalid
+    Case 1
+      'Compare the address on the screen with the Cdyne address
+      result_compare_addr=StrComp(Address2,Address2_n,1)
+      result_compare_city=StrComp(City,City_n,1)
+      result_compare_state=StrComp(State,State_n,1)
+      result_compare_zip=StrComp(Zipcode,Zipcode_n,1)
+
+      If (result_compare_addr = 0) And (result_compare_city = 0) And (result_compare_state = 0) And (result_compare_zip = 0) Then
+
+        Coordinates = LatLng(AddressURLgoogle)
+        MyArray = Split(Coordinates, ",", -1, 1)
+        Latitude= MyArray(0)
+        Longitude = MyArray(1)
+
+        'updates the lat/lng's on the screen  
+        LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+        If LatLngOK = 1 Then
+          rcupdate = 3
+        Else
+          rcupdate = 0
+        End If
+      Else  
+        update_address = MsgBox("The updated address is -"&vbNewline+Address_disp_ex&vbNewline&vbNewline+"Press Yes to update the address"&vbNewline+"Press No to keep Original", vbYesNo, "Address Validation") 
+      
+        Select Case update_address
+           
+        Case vbYes                   
+        
+          'updates the address on the screen
+          call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n)
+
+          Coordinates = LatLng(AddressURLgoogle)
+          MyArray = Split(Coordinates, ",", -1, 1)
+          Latitude= MyArray(0)
+          Longitude = MyArray(1)
+
+          'updates the Lat/Lng's on the screen
+          LatLngOK = LatLongUpdate(Latitude,Longitude)
+        
+          If LatLngOK = 1 Then
+            rcupdate = 2
+          Else
+            rcupdate = 1
+          End If
+          
+        Case vbNo
+
+          Coordinates = LatLng(AddressURLgoogle_scr)
+          MyArray = Split(Coordinates, ",", -1, 1)
+          Latitude= MyArray(0)
+          Longitude = MyArray(1)
+          LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+          If LatLngOK = 1 Then
+            rcupdate = 3
+          Else
+            rcupdate = 0
+          End If
+
+        End Select
+	    End If
+    Case 2
+
+      'rcmultiple - 0 --> exit the Macro
+      'rcmultiple - 1 --> single address is returned
+      'rcmultiple - 2 --> multiple addresses are returned
+
+      rcmultiple = caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n,Address_disp)
+      
+      'msgbox rcmultiple
+
+      Select Case rcmultiple
+      Case 0
+        Exit Sub
+      Case 1
+        result_compare_addr=StrComp(Address2,Address2_n,1)
+        result_compare_city=StrComp(City,City_n,1)
+        result_compare_state=StrComp(State,State_n,1)
+        result_compare_zip=StrComp(Zipcode,Zipcode_n,1)
+
+        If (result_compare_addr = 0) And (result_compare_city = 0) And (result_compare_state = 0) And (result_compare_zip = 0) Then
+
+          Coordinates = LatLng(AddressURLgoogle)
+          MyArray = Split(Coordinates, ",", -1, 1)
+          Latitude= MyArray(0)
+          Longitude = MyArray(1)
+
+          'updates the lat/lng's on the screen  
+          LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+          If LatLngOK = 1 Then
+            rcupdate = 3
+          Else
+            rcupdate = 0
+          End If
+        Else  
+          'update_address = MsgBox("The address didn't match. The updated address is -"&vbNewline+Address_disp_ex&vbNewline&vbNewline+"Press Yes to update the address"&vbNewline+"Press No to keep Original", vbYesNo, "Address Validation") 
+          update_address = MsgBox("The updated address is -"&vbNewline+Address_disp_ex&vbNewline&vbNewline+"Press Yes to update the address"&vbNewline+"Press No to keep Original", vbYesNo, "Address Validation") 
+
+          'updates the address on the screen
+          Select Case update_address
+          Case vbYes
+            call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n)
+
+            Coordinates = LatLng(AddressURLgoogle)
+            MyArray = Split(Coordinates, ",", -1, 1)
+            Latitude= MyArray(0)
+            Longitude = MyArray(1)
+
+            'updates the Lat/Lng's on the screen
+            LatLngOK = LatLongUpdate(Latitude,Longitude)
+          
+            If LatLngOK = 1 Then
+              rcupdate = 2
+            Else
+              rcupdate = 1
+            End If
+            
+          Case vbNo
+
+            Coordinates = LatLng(AddressURLgoogle_scr)
+            MyArray = Split(Coordinates, ",", -1, 1)
+            Latitude= MyArray(0)
+            Longitude = MyArray(1)
+            LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+            If LatLngOK = 1 Then
+              rcupdate = 3
+            Else
+              rcupdate = 0
+            End If
+
+          End Select 
+        End If  
+      Case 2
+          rcupdate = 4
+      End Select
+    Case Else
+      Exit Sub
+  End Select		 
+
+  'msgbox rcupdate
+  'Update the final message displaying the updates done on the screen 
+  Select Case rcupdate
+    Case 0
+      msgbox "Address not updated and the lat/lng's have been updated."
+    Case 1
+      msgbox "Address and the lat/lng's have been updated." 
+    Case 2
+      msgbox "Address has been updated and the lat/lng's are not updated."
+    Case 3
+      msgbox "Address and the lat/lng's are not updated." 
+    Case Else
+      'do nothing       
+  End Select         
+End Sub
+
+Function cdyne(LKey,Addr,city,state,zip)
+  Dim cXML, oXMLHttp
+
+  'Send the above details to query cdyne and fetch the corrected details.
+ 
+  cXML =  "<PavRequest xmlns=""pav3.cdyne.com"">" & _
+          "<CityName>"+city+"</CityName>" & _
+          "<FirmOrRecipient></FirmOrRecipient>" & _
+          "<LicenseKey>"+LKey+"</LicenseKey>" & _
+          "<PrimaryAddressLine>"+Addr+"</PrimaryAddressLine>" & _
+          "<ReturnCaseSensitive>true</ReturnCaseSensitive>" & _
+          "<ReturnCensusInfo>true</ReturnCensusInfo>" & _
+          "<ReturnCityAbbreviation>true</ReturnCityAbbreviation>" & _
+          "<ReturnGeoLocation>true</ReturnGeoLocation>" & _
+          "<ReturnLegislativeInfo>true</ReturnLegislativeInfo>" & _
+          "<ReturnMailingIndustryInfo>true</ReturnMailingIndustryInfo>" & _
+          "<ReturnResidentialIndicator>true</ReturnResidentialIndicator>" & _
+          "<ReturnStreetAbbreviated>true</ReturnStreetAbbreviated>" & _
+          "<SecondaryAddressLine></SecondaryAddressLine>" & _
+          "<State>"+state+"</State>" & _
+          "<Urbanization></Urbanization>" & _
+          "<ZipCode></ZipCode>" & _
+          "</PavRequest>"
+
+  'send the XML request to cdyne
+  Set oXMLHttP = CreateObject("Microsoft.XMLHTTP")
+  Call oXMLHttp.Open("POST", "http://pav3.cdyne.com/PavService.svc/VerifyAddressAdvanced", False)
+  Call oXMLHttp.setRequestHeader("Content-Type", "text/xml")        
+  Call oXMLHttp.send(cXML)
+
+  'check whether we got any response from the XML request
+  If oXMLHttp.Status = 200 Then
+    cdyne = oXMLHttp.responseText
+  End If
+
+End Function
+
+Function LatLng (AddressURL)
+
+  Dim BaseURL, FinalURL
+  Dim xmlRequest, xmlData, latPos, lat, lngPos, lng, pos, loctype, loc, todayOnly, statstrt, statend, stat, ret, operator
+  Dim matchType, partMatch, partMatchStrt, partMatchEnd, resStrt, resEnd, resData
+
+    BaseURL = "https://maps.googleapis.com/maps/api/geocode/xml?address="
+
+  
+    ' Generating the entire URL with address in it    
+    FinalURL = BaseURL+AddressURL
+
+    ' Setting up the GET request to web for a connection         
+    Set xmlRequest = CreateObject("MSXML2.XMLHTTP")
+    xmlRequest.open "GET", FinalURL, False
+    xmlRequest.send
+
+    ' If the connection is GOOD then only fetch data
+    If xmlRequest.Status = 200 Then
+        xmlData = xmlRequest.responseText
+       'msgbox xmlData
+        ' Fetching the status of the address that was queried
+        statstrt = InStr(1, xmlData, "<status>")
+        statend = InStr(1, xmlData, "</status>")
+        stat = Mid(xmlData,statstrt+8,statend-(statstrt+8))
+       
+        ' If the status is OK i.e. the address was successfully parsed then fetch and put the LAT and LNG 
+          ' Otherwise skip that record
+        If stat = "OK" Then
+        ' Taking out only the first result from the xml returned for the address sent and using it further as a Base
+            resStrt = InStr(1, xmlData, "<result>")
+            resEnd  = InStr(1, xmlData, "</result>")
+            resData = Mid(xmlData,resStrt+8,resEnd-(resStrt+8))
+        
+
+            latPos = InStr(1, resData, "<lat>")
+            lngPos = InStr(1, resData, "<lng>")
+            loctype = InStr(1,resData,"<location_type>")
+            locEndType = InStr(1,resData,"</location_type>")
+            lat = Mid(resData, latPos+5, 8)
+            lng = Mid(resData, lngPos+5, 9)
+            loc = Mid(resData, loctype+15,locEndType-(loctype+15))
+            todayOnly = ""
+
+        ' Depending on the location type for the address returned put in an indicator in the "TODAY ONLY" field   
+        ' Location_type stores additional data about the specified location. The following values are currently supported:
+        '
+        '   -> "ROOFTOP" indicates that the returned result is a precise geocode for which we have location information accurate down to
+        '        street address precision.
+        '   -> "RANGE_INTERPOLATED" indicates that the returned result reflects an approximation (usually on a road) interpolated between 
+        '        two precise points (such as intersections). Interpolated results are generally returned when rooftop geocodes are unavailable
+        '        for a street address.
+        '   -> "GEOMETRIC_CENTER" indicates that the returned result is the geometric center of a result such as a polyline (for example, 
+        '        a street) or polygon (region).
+        '   -> "APPROXIMATE" indicates that the returned result is approximate.
+
+         
+            Select Case loc
+                Case "ROOFTOP"
+                    todayOnly = " "
+                Case "RANGE_INTERPOLATED"
+                    todayOnly = "R"
+                Case "GEOMETRIC_CENTER"
+                    todayOnly = "G"
+                Case "APPROXIMATE"
+                    todayOnly = "A"
+                Case else
+                   msgbox "Unknown Error"
+            End Select
+       
+        ' Check for Partial Match tag
+            partMatchStrt = InStr(1, resData, "<partial_match>")
+            partMatchEnd = InStr(1, resData, "</partial_match>")
+                        
+            partMatch = ""
+        ' If partialMatch tag is present then fetch the value returned for it and set the PartMatch to 'P'  
+            If partMatchStrt > 0 and partMatchEnd > 0 then
+             
+                matchType = Mid(resData,partMatchStrt+15,partMatchEnd-(partMatchStrt+15))
+                IF matchType = "true" Then
+                    partMatch = "P" 
+                END If
+            End If
+
+        ' Sending the value for latitude, longitude, locationType and Partial Match Column over the screen        
+         
+            If todayOnly = "A" or todayOnly = "G"  Then
+                ' do nothing
+                LatLng = lat+","+lng
+            else                      
+                LatLng = lat+","+lng
+            End If  
+        Else
+            LatLng = fetchLatLngbing(AddressURLbing)
+            'MyArray = Split(Coordinates, ",", -1, 1)
+            'Latitude= MyArray(0)
+            'Longitude = MyArray(1)
+            'call LatLongUpdate(Latitude,Longitude)
+        End If
+    Else    
+        LatLng = fetchLatLngbing(AddressURLbing)
+        'MyArray = Split(Coordinates, ",", -1, 1)
+        'Latitude= MyArray(0)
+        'Longitude = MyArray(1)
+        'call LatLongUpdate(Latitude,Longitude)
+    End If 
+
+End Function
+
+'clears the screen for address Space
+Function CleanStringAddr()
+  SendString 15,11,Space(25)
+  SendString 16,11,Space(15)
+  SendString 16,37,Space(2)
+  SendString 16,40,Space(5)
+End Function
+
+'updates the address on the screen
+Function AddressUpdate(addr,city,state,zip)
+  
+  call CleanStringAddr()
+
+  SendString 15,11,addr
+  SendString 16,11,city
+  SendString 16,37,state
+  SendString 16,40,zip
+ 
+End Function 
+
+'clears the screen for 
+Function CleanStringLatLng()
+
+  SendString 18,21,Space(10)
+  SendString 19,22,Space(11)
+
+End Function
+
+Function GetLatLngScreen(Latmain,Latdec,Longmain,Longdec)
+
+  Latmainscr = GetString (18,21,2)
+  Latdecscr  = GetString (18,24,4)
+  Longmainscr = GetString (19,22,3)
+  Longdecscr = GetString (19,26,4)
+
+  '' to be removed when screen accomodates 5 length values
+  Latdec = Left (Latdec,4)
+  Longdec = Left (Longdec,4)
+
+  'msgbox Latmainscr + " vs " + Latmain
+  'msgbox Latdecscr + " vs " + Latdec
+  'msgbox Longmainscr + " vs " + Longmain
+  'msgbox Longdecscr + " vs " + Longdec
+
+  IF Latmain=Latmainscr and Latdec=Latdecscr and Longmain=Longmainscr and Longdec=Longdecscr Then
+    GetLatLngScreen = 1
+  Else
+    GetLatLngScreen = 0
+  End If 
+
+End Function
+
+Function LatLongUpdate(lat,lng)
+
+  MyLat = Split(lat,".", -1, 1)
+  MyLng = Split(lng,".", -1, 1)
+              
+  Latmain = MyLat(0)
+  Latdec = MyLat(1)
+  Longmain = MyLng(0)
+  If Len(Longmain) = 4 then
+    Longmain = CStr(-Longmain)
+  Else
+    Longmain ="0"+CStr(-Longmain)
+  End If 
+  Longdec = MyLng(1)
+
+  LatLongUpdate = GetLatLngScreen(Latmain,Latdec,Longmain,Longdec)
+
+  If LatLongupdate = 0 Then
+    'Compare the Lat/Lng from the screen
+    If Len(lng) = 4 Then
+     lng = CStr(-lng)
+    Else
+     lng ="0"+CStr(-lng)
+    End If 
+    update_latlong= msgbox("Latitude ="+lat&vbnewline+"Longitude = "+lng&vbnewline&vbnewline+"Do you want to update the Lat/Long's?", vbYesNo, "Lat-Lng Verification")
+    Select Case update_latlong
+    Case vbYes
+      call CleanStringLatLng()
+      SendString 18,21,lat
+      SendString 19,22,lng
+    Case vbNo
+      LatLongUpdate = 1
+    End Select
+  Else
+    'do nothing'
+  End If
+End Function
+
+Function WriteXMLInFile(xmlData)
+
+  Const ForReading = 1, ForWriting = 2, ForAppending = 8
+  Const TristateUseDefault = -2, TristateTrue = -1, TristateFalse = 0
+  Dim fso, MyFile, FileName, TextLine
+  Set fso = CreateObject("Scripting.FileSystemObject")
+
+  set objFSO=CreateObject("Scripting.FileSystemObject")
+  Set WSHshell = CreateObject("WScript.Shell")
+  desktop = WSHShell.SpecialFolders("Desktop")
+  pathstring = objFSO.GetAbsolutePathName(desktop)
+
+  FileName = pathstring+"\output1.txt"
+  Set MyFile = fso.OpenTextFile(FileName, ForWriting, True)
+  MyFile.WriteLine xmlData
+  MyFile.Close
+  Set MyFile = fso.OpenTextFile(FileName, ForReading)
+  Do While MyFile.AtEndOfStream <> True
+  TextLine = MyFile.ReadLine
+  Loop
+  MyFile.Close
+
+End Function
+
+Function fetchLatLngbing(AddressURL)
+
+  Dim key
+
+  BaseURL="http://dev.virtualearth.net/REST/v1/Locations/US/"
+
+  key="?o=xml&key=Atvh3yWGZroEGuvrZilpk4ctXJ2qOnNava4wsmd8Rz92ncOgeZcJ4_Ue0QKBCHB1"
+
+
+
+  FinalURL = BaseURL+AddressURL+key
+
+    'msgbox FinalURL
+
+  Set xmlRequest = CreateObject("MSXML2.XMLHTTP")
+  xmlRequest.open "GET", FinalURL, False
+  xmlRequest.send
+          
+      ' If the connection is GOOD then only fetch data
+  If xmlRequest.Status = 200 Then
+    xmlData = xmlRequest.responseText
+
+    Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+    objXMLDoc.async = false
+    objXMLDoc.loadXML(xmlData)
+    'objXMLDoc.Save "C:\Users\Rohan Dua\Desktop\test.xml"
+
+    Set Root = objXMLDoc.documentElement
+    Set sd = Root.getElementsByTagName("StatusDescription")(0)
+
+    'msgbox sd.text
+
+    If sd.text = "OK" Then
+  
+      set conf = Root.getElementsByTagName("Confidence")(0)
+      set mc = Root.getElementsByTagName("MatchCode")(0)
+      
+      'msgbox ("The address returned from Bing is-"+mc.text+"-"+conf.text)  
+
+      Select Case mc.text
+      Case "Good"
+        Select Case conf.text
+        Case "High" 
+          fetchLatLngbing = fetchLatLng(xmlData)
+          rcvalid=1
+        Case "Medium"   
+          fetchLatLngbing = fetchLatLng(xmlData) 
+          rcvalid=1  
+      End Select
+      Case "Ambiguous"
+        Select Case conf.text
+        Case "Medium"   
+          fetchLatLngbing = fetchAddresses(xmlData)
+          'call fetchLatLng(xmlData)
+          rcvalid=1
+        Case "Low"  
+          rcvalid=0  
+      End Select
+      Case "UpHierarchy"
+        Select Case conf.text
+        Case "Medium"   
+          fetchLatLngbing = fetchAddresses(xmlData)
+          rcvalid=1
+        Case "Low"  
+          rcvalid=0    
+      End Select    
+      End Select  
+        
+      If rcvalid = 0 Then
+        msgbox "Bing wasn't able to fetch the exact address."
+      End If
+    Else  
+      msgbox "Bing wasn't able to fetch the exact address."    
+    End If
+  Else
+    msgbox "Bing wasn't able to fetch the exact address."
+  End If     
+
+End Function
+
+Function fetchLatLng(xmlData)
+
+  Dim disp2(5)
+  Dim lat1(5)
+  Dim lng1(5)
+  Dim Maindisp,disp1,respno
+
+  Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+  objXMLDoc.async = false
+  objXMLDoc.loadXML(xmlData)  
+  Set Root = objXMLDoc.documentElement
+  Set NodeList = Root.getElementsByTagName("GeocodePoint")
+
+  For Each Elem In NodeList
+
+    set lat = Elem.getElementsByTagName("Latitude")(0)
+    set lng = Elem.getElementsByTagName("Longitude")(0)
+    set ut =  Elem.getElementsByTagName("UsageType")(0)
+    
+    latRoff=Round(lat.text,5)
+    lngRoff=Round(lng.text,5)
+    utD = ut.text
+    
+    IF utD = "Display" Then
+      resp = x
+    End If
+    
+    lat1(x)= latRoff
+    lng1(x)= lngRoff
+          x=x+1    
+  Next
+  fetchLatLng= Cstr(lat1(resp))+","+Cstr(lng1(resp))
+            
+End Function
+
+Function fetchAddresses(xmlData)
+
+  Dim Addresses
+  Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+  objXMLDoc.async = false
+  objXMLDoc.loadXML(xmlData)
+  
+  Set Root = objXMLDoc.documentElement
+  Set NodeList = Root.getElementsByTagName("Location")
+
+  Dim Address(10)
+  Dim lat(10)
+  Dim lng(10)
+
+  For Each Elem In NodeList
+
+    set Name = Elem.getElementsByTagName("Name")(0)
+    set lat1 = Elem.getElementsByTagName("Latitude")(0)
+    set lng1 = Elem.getElementsByTagName("Longitude")(0)
+
+    Address(x) = Name.text
+    lat(x)=lat1.text
+    lng(x)=lng1.text
+    'call LatLongUpdate(lat.text,lng.text,ut.text)
+    
+    y=Left(x+1,1)            
+    Addresses = Addresses+"Address "+y+": "+Address(x)& vbNewline
+
+
+    disp_box= "Below are the multiple address option to choose from, Please Enter your choice-"&vbNewline +Addresses
+
+    x=x+1    
+  Next
+
+  resp = InputBox(disp_box,"Enter Value")
+  resp1=CInt(resp)
+        
+  IF resp1 > x  Then
+       msgbox "Invalid Entry.Press OK to redirect."
+       fetchAddresses(xmlData)
+  Else
+       fetchAddresses = Cstr(lat(resp-1))+","+CStr(lng(resp-1))
+  End If              
+
+End Function
+
+Function caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n,Address_disp)
+  
+
+  Dim x,disp_box,PrimaryAddressNo,y
+
+  Dim Address(10)
+  Dim PrimaryAddr(10)
+  x=1
+  Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+  objXMLDoc.async = false
+  objXMLDoc.loadXML(xmlData)
+
+  Set Root = objXMLDoc.documentElement 
+  Set NodeList = Root.getElementsByTagName("AddressInfo")
+
+  For Each Elem In NodeList 
+
+    Set RT = Elem.getElementsByTagName("RecordTypeCode")(0)
+    Set PH = Elem.getElementsByTagName("PrimaryHigh")(0)
+    Set PL = Elem.getElementsByTagName("PrimaryLow")(0)
+    Set Suffix = Elem.getElementsByTagName("Suffix")(0)
+    Set PreDirectional = Elem.getElementsByTagName("PreDirectional")(0)
+    Set StreetName = Elem.getElementsByTagName("StreetName")(0)
+    Set ZipCode = Elem.getElementsByTagName("ZipCode")(0)
+    'set SAL = Elem.getElementsByTagName("")(0)
+    set SH = Elem.getElementsByTagName("SecondaryHigh")(0)
+    set SL = Elem.getElementsByTagName("SecondaryLow")(0)
+    set SAbb = Elem.getElementsByTagName("SecondaryAbbreviation")(0)
+
+    IF PH.text=PL.text then
+      PrimaryAddressNo = PH.text 
+    Else
+      PrimaryAddressNo = PL.text+" to "+PH.text             
+    End IF  
+
+    IF SH.text=SL.text then
+      SecondaryAdd = SH.text 
+    Else
+      SecondaryAdd = SL.text+" to "+SH.text             
+    End IF  
+
+    Select Case RT.text
+    Case "F"
+      RecordTypeCode = "Firm"
+    Case "G"
+      RecordTypeCode = "General Delivery"
+    Case "H"
+      RecordTypeCode = "HighRise"
+    Case "P"
+      RecordTypeCode = "P.O Box"
+    Case "R"
+      RecordTypeCode = "Route/Highway Contract"
+    Case "S" 
+      RecordTypeCode = "Street"
+    End Select 
+
+    Address(x)= PrimaryAddressNo+" "+PreDirectional.text+" "+StreetName.text+" "+Suffix.text&vbNewline+"    ("+SAbb.text+" "+SecondaryAdd+")"&vbNewline+"    "+City_n+", "+State_n+" "+ZipCode.text&vbNewline&vbNewline
+
+    PrimaryAddr(x) = PrimaryAddressNo+" "+PreDirectional.text+" "+StreetName.text+" "+Suffix.text
+
+    y=Left(x+1,1)
+
+    Addresses = Addresses+y+": "+Address(x)
+
+    'msgbox Addresses
+    x=x+1
+  Next
+
+  
+  If x=2 Then
+    caseMultiple = 1
+  Else
+    disp_box= "1: "+Address_disp&vbNewline+"    (Preferred Address)"&vbNewline&vbNewline+Addresses&vbNewline+"Please enter the serial no. of the address you would like to proceed with-"
+
+    resp = InputBox(disp_box,"Address Verification")
+    
+
+    If resp="" Then
+      If Vartype(resp) = EMPTY then
+        caseMultiple = 0
+      Else   
+        msgbox "Please make a valid selection"
+        call caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n,Address_disp)
+      End IF
+    Else
+      If resp = "0" or isNumeric(resp) = false Then
+      msgbox "Please make a valid selection"
+      call caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n,Address_disp)
+      'caseMultiple = 0
+      Else
+        resp= Int(resp)
+        If resp = 1 Then
+            call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n)
+            Coordinates = LatLng(AddressURLgoogle)
+            MyArray = Split(Coordinates, ",", -1, 1)
+            Latitude= MyArray(0)
+            Longitude = MyArray(1)
+        
+            LatLngok = LatLongUpdate(Latitude,Longitude)
+            caseMultiple = 2
+
+            If LatLngOK = 1 Then
+              msgbox "Address has been updated and the lat/lng's are not updated."
+            Else
+              msgbox "Address and the lat/lng's have been updated." 
+            End If 
+               
+        Else 
+          IF resp <= x Then
+            Address2_n = PrimaryAddr(resp-1)
+            'msgbox Address2_n
+            call AddressUpdate(Address2_n,City_n,State_n,Zipcode_n)
+            Address2_n=Replace(Address2_n,"  "," ")
+            'msgbox Address2_n
+            AddressLineGoogle = Replace(Address2_n," ","+")
+            AddressLineBing = Replace(Address2_n," ","%20")
+            AddressURLbing= State_n+"/"+Zipcode_n+"/"+City_n+"/"+AddressLineBing
+            AddressURLgoogle = AddressLineGoogle+"+"+City_n+"+"+State_n
+
+            'msgbox AddressURLgoogle
+            
+            Coordinates = LatLng(AddressURLgoogle)
+            MyArray = Split(Coordinates, ",", -1, 1)
+            Latitude= MyArray(0)
+            Longitude = MyArray(1)
+        
+            LatLngOK = LatLongUpdate(Latitude,Longitude)
+
+            caseMultiple = 2
+
+            If LatLngOK = 1 Then
+              msgbox "Address has been updated and the lat/lng's are not updated."
+            Else
+              msgbox "Address and the lat/lng's have been updated." 
+            End If
+          Else
+            msgbox "Please make a valid selection"
+            call caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n,Address_disp)
+          End If
+        End If
+      End If 
+    End If
+  End If 
+        
+End Function

@@ -1,0 +1,172 @@
+    'Coditions to run the Macro - 
+    ''1.Create the file with the name "Cust_w-o_LatLng.txt"
+    ''2.The file should be present in the Folder with "GetLatLng"
+    ''3.The folder should be present on the Desktop.  
+Sub ZMain()
+
+    Dim finalStr, Str, pos, ret1, ret2, val, strLine
+    Dim addr1, addr2, state, city, zip, cntr, AddressURL, Coordinates, folderLoc
+    Dim MyArray
+    
+'*************************************************************************************************************************************
+    Set obj1FSO = CreateObject("Scripting.FileSystemObject")
+    Set WSHshell = CreateObject("WScript.Shell")
+    desktop = WSHShell.SpecialFolders("Desktop")
+    pathstring = obj1FSO.GetAbsolutePathName(desktop)
+
+    'folderLoc = obj1FSO.GetParentFolderName("\Atl_GetLatLng_V3.zmc") 
+
+'*************************************************************************************************************************************
+    Set oFS = CreateObject("Scripting.FileSystemObject")
+    Set f = oFS.GetFolder(pathstring+"\GetLatLng")
+
+    If (oFS.FileExists(pathstring +"\GetLatLng\Cust_w-o_LatLng.txt")) Then  
+        rcpresent=1
+    Else
+        msgbox "File Cust_w-o_LatLng.txt doesn't exist"
+        rcpresent=0
+        Exit Sub
+    End If
+
+    If rcpresent = 1 Then
+    Set repFso = CreateObject("Scripting.FileSystemObject")
+    'Set repFile = repFso.CreateTextFile(folderLoc & "KNX_Cust_with_LatLng.txt", True)
+    Set repFile = repFso.CreateTextFile(pathstring+"\GetLatLng\Cust_with_LatLng.txt", True)
+
+    repFile.Close
+
+    Set objFso = CreateObject("Scripting.FileSystemObject")
+    'Set objFile = objFso.OpenTextFile(folderLoc & "KNX_Cust_w-o_LatLng.txt", 1)
+    Set objFile = objFso.OpenTextFile(pathstring+"\GetLatLng\Cust_w-o_LatLng.txt", 1)
+
+    Set repFso = CreateObject("Scripting.FileSystemObject")
+    'Set repFile = repFso.OpenTextFile(folderLoc & "KNX_Cust_with_LatLng.txt", 2)
+    Set repFile = repFso.OpenTextFile(pathstring+"\GetLatLng\Cust_with_LatLng.txt", 2)
+
+    repFile.WriteLine( "TERM,TERR,CUST,NAME,ADDRESS,CITY,STATE,ZIP,LATITUDE,LONGITUDE,CUST PPD,CUST COL,IB SHIP,OB SHIP,RATEING,DTE ADDED,GOOGLE LATITUDE,GOOGLE LONGITUDE,ERROR")
+
+    Do Until objFile.atEndOfStream
+        Str = objFile.ReadLine
+        MyArray = Split(Str, ",", -1, 1)
+       
+        addr = Replace(Trim(MyArray(4)), " ", "+")
+        city  = Replace(Trim(MyArray(5)), " ", "+")
+        state = Replace(Trim(MyArray(6)), " ", "+")
+        zip =  Replace(Trim(MyArray(7)), " ", "+")
+
+        AddressURL = addr+"+"+City+"+"+State+"+"+ZIP
+        Coordinates = LatLng(AddressURL)
+        strLine = Str & "," & Coordinates
+        repFile.WriteLine(strLine)
+
+    Loop 
+
+    objFile.Close
+    repFile.Close
+
+    msgbox "done checking"
+
+    Else
+    'do nothing
+    End If
+End Sub
+
+Function LatLng (AddressURL)
+
+Dim BaseURL, FinalURL
+Dim xmlRequest, xmlData, latPos, lat, lngPos, lng, pos, loctype, loc, todayOnly, statstrt, statend, stat, ret, operator
+Dim matchType, partMatch, partMatchStrt, partMatchEnd, resStrt, resEnd, resData
+
+    BaseURL = "https://maps.googleapis.com/maps/api/geocode/xml?address="
+
+  
+    ' Generating the entire URL with address in it    
+    FinalURL = BaseURL+AddressURL
+
+    ' Setting up the GET request to web for a connection         
+    Set xmlRequest = CreateObject("MSXML2.XMLHTTP")
+    xmlRequest.open "GET", FinalURL, False
+    xmlRequest.send
+
+    ' If the connection is GOOD then only fetch data
+    If xmlRequest.Status = 200 Then
+        xmlData = xmlRequest.responseText
+       
+        ' Fetching the status of the address that was queried
+        statstrt = InStr(1, xmlData, "<status>")
+        statend = InStr(1, xmlData, "</status>")
+        stat = Mid(xmlData,statstrt+8,statend-(statstrt+8))
+       
+        ' If the status is OK i.e. the address was successfully parsed then fetch and put the LAT and LNG 
+          ' Otherwise skip that record
+        If stat = "OK" Then
+        ' Taking out only the first result from the xml returned for the address sent and using it further as a Base
+            resStrt = InStr(1, xmlData, "<result>")
+            resEnd  = InStr(1, xmlData, "</result>")
+            resData = Mid(xmlData,resStrt+8,resEnd-(resStrt+8))
+        
+
+            latPos = InStr(1, resData, "<lat>")
+            lngPos = InStr(1, resData, "<lng>")
+            loctype = InStr(1,resData,"<location_type>")
+            locEndType = InStr(1,resData,"</location_type>")
+            lat = Mid(resData, latPos+5, 8)
+            lng = Mid(resData, lngPos+5, 9)
+            loc = Mid(resData, loctype+15,locEndType-(loctype+15))
+            todayOnly = ""
+
+        ' Depending on the location type for the address returned put in an indicator in the "TODAY ONLY" field   
+        ' Location_type stores additional data about the specified location. The following values are currently supported:
+        '
+        '   -> "ROOFTOP" indicates that the returned result is a precise geocode for which we have location information accurate down to
+        '        street address precision.
+        '   -> "RANGE_INTERPOLATED" indicates that the returned result reflects an approximation (usually on a road) interpolated between 
+        '        two precise points (such as intersections). Interpolated results are generally returned when rooftop geocodes are unavailable
+        '        for a street address.
+        '   -> "GEOMETRIC_CENTER" indicates that the returned result is the geometric center of a result such as a polyline (for example, 
+        '        a street) or polygon (region).
+        '   -> "APPROXIMATE" indicates that the returned result is approximate.
+
+         
+            Select Case loc
+                Case "ROOFTOP"
+                    todayOnly = " "
+                Case "RANGE_INTERPOLATED"
+                    todayOnly = "R"
+                Case "GEOMETRIC_CENTER"
+                    todayOnly = "G"
+                Case "APPROXIMATE"
+                    todayOnly = "A"
+                Case else
+                   msgbox "Unknown Error"
+            End Select
+       
+        ' Check for Partial Match tag
+            partMatchStrt = InStr(1, resData, "<partial_match>")
+            partMatchEnd = InStr(1, resData, "</partial_match>")
+                        
+            partMatch = ""
+        ' If partialMatch tag is present then fetch the value returned for it and set the PartMatch to 'P'  
+            If partMatchStrt > 0 and partMatchEnd > 0 then
+             
+                matchType = Mid(resData,partMatchStrt+15,partMatchEnd-(partMatchStrt+15))
+                IF matchType = "true" Then
+                    partMatch = "P" 
+                END If
+            End If
+
+        ' Sending the value for latitude, longitude, locationType and Partial Match Column over the screen        
+         
+            If todayOnly = "A" or todayOnly = "G"  Then
+                ' do nothing
+                LatLng = lat+","+lng+","+todayOnly
+            else                      
+                LatLng = lat+","+lng+","
+            End If  
+        else
+            LatLng = Null
+        End If
+
+    End If 
+
+End Function

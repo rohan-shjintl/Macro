@@ -1,0 +1,150 @@
+Sub ZMain()
+ 
+' Check for whether the screen is the "RCHT --> 3. Correct Geocodes" screen
+ If GetString(1,2,12) = "RCHT EC599AO" Then
+
+  Dim BaseURL, CustomerName, Address1, City, State, ZIP, Country, AddressURL, FinalURL
+  Dim xmlRequest, xmlData, latPos, lat, lngPos, lng, pos, loctype, loc, todayOnly, statstrt, statend, stat, ret, operator
+  Dim matchType, partMatch, partMatchStrt, partMatchEnd, resStrt, resEnd, resData
+  
+  ' Run for rows 6 to 21 on the screen, where Lat-Lng need to be populated
+    For pos = 6 to 21
+
+
+      BaseURL = "https://maps.googleapis.com/maps/api/geocode/xml?address="
+
+  '  The below statement puts in the character X into the TODAY-ONLY column
+  '              SendString pos, 21, "X" 
+
+  ' If the Customer Name is not present i.e. if no record is present on the line, terminate fetching Lat-Lng and Stop.
+  ' This is check and assumption to find the last record or when the program needs to stop running.
+
+                CustomerName = Replace(Trim(GetString (pos, 25, 9)), " ", "+")
+
+      ' Get the address, City, State, Zip from the screen for the current row.
+                Address1 = Replace(Trim(GetString (pos, 35, 25)), " ", "+")
+                City = Replace(Trim(GetString (pos, 61, 17)), " ", "+")
+                State = Replace(Trim(GetString (pos, 79, 2)), " ", "+")
+      '          ZIP = Replace(Trim(GetString (pos, 76, 5)), " ", "+")
+       
+      'If CustomerName = "" and Address1 = "" and City = "" and State = "" and ZIP = "" Then
+       If CustomerName = "" and Address1 = "" and City = "" and State = "" Then 
+          ' Do Nothing
+       else
+                        
+          '      AddressURL = Address1+"+"+City+"+"+State+"+"+ZIP
+                 AddressURL = Address1+"+"+City+"+"+State
+
+          ' Generating the entire URL with address in it    
+                FinalURL = BaseURL+AddressURL
+
+                   
+          ' Setting up the GET request to web for a connection         
+                Set xmlRequest = CreateObject("MSXML2.XMLHTTP")
+                xmlRequest.open "GET", FinalURL, False
+                xmlRequest.send
+
+          ' If the connection is GOOD then only fetch data
+               If xmlRequest.Status = 200 Then
+                xmlData = xmlRequest.responseText
+                'msgbox xmlData
+          ' Fetching the status of the address that was queried
+                 statstrt = InStr(1, xmlData, "<status>")
+                 statend = InStr(1, xmlData, "</status>")
+                 stat = Mid(xmlData,statstrt+8,statend-(statstrt+8))
+
+          ' If the status is OK i.e. the address was successfully parsed then fetch and put the LAT and LNG 
+          ' Otherwise skip that record
+                 If stat = "OK" Then
+          ' Taking out only the first result from the xml returned for the address sent and using it further as a Base
+                     resStrt = InStr(1, xmlData, "<result>")
+                     resEnd  = InStr(1, xmlData, "</result>")
+                     resData = Mid(xmlData,resStrt+8,resEnd-(resStrt+8))
+                
+
+                     latPos = InStr(1, resData, "<lat>")
+                     lngPos = InStr(1, resData, "<lng>")
+                     loctype = InStr(1,resData,"<location_type>")
+                     locEndType = InStr(1,resData,"</location_type>")
+                     lat = Mid(resData, latPos+5, 8)
+                     lng = Mid(resData, lngPos+5, 9)
+                     loc = Mid(resData, loctype+15,locEndType-(loctype+15))
+                     todayOnly = ""
+
+          ' Depending on the location type for the address returned put in an indicator in the "TODAY ONLY" field   
+          ' Location_type stores additional data about the specified location. The following values are currently supported:
+          '
+          '   -> "ROOFTOP" indicates that the returned result is a precise geocode for which we have location information accurate down to
+          '        street address precision.
+          '   -> "RANGE_INTERPOLATED" indicates that the returned result reflects an approximation (usually on a road) interpolated between 
+          '        two precise points (such as intersections). Interpolated results are generally returned when rooftop geocodes are unavailable
+          '        for a street address.
+          '   -> "GEOMETRIC_CENTER" indicates that the returned result is the geometric center of a result such as a polyline (for example, 
+          '        a street) or polygon (region).
+          '   -> "APPROXIMATE" indicates that the returned result is approximate.
+
+                      todayOnly = ""
+                      Select Case loc
+                         Case "ROOFTOP"
+                               todayOnly = " "
+                         Case "RANGE_INTERPOLATED"
+                               todayOnly = "R"
+                         Case "GEOMETRIC_CENTER"
+                               todayOnly = "G"
+                         Case "APPROXIMATE"
+                               todayOnly = "A"
+                         Case else
+                               msgbox "Unknown Error"
+                      End Select
+
+          ' Check for Partial Match tag
+                      partMatchStrt = InStr(1, resData, "<partial_match>")
+                      partMatchEnd = InStr(1, resData, "</partial_match>")
+                        
+                      partMatch = ""
+          ' If partialMatch tag is present then fetch the value returned for it and set the PartMatch to 'P'  
+                      If partMatchStrt > 0 and partMatchEnd > 0 then
+                         
+                         matchType = Mid(resData,partMatchStrt+15,partMatchEnd-(partMatchStrt+15))
+                         IF matchType = "true" Then
+                             partMatch = "P" 
+                         END If
+                      End If
+                      
+          ' Sending the value for latitude, longitude, locationType and Partial Match Column over the screen        
+
+                      if todayOnly = "A" or todayOnly = "G"  Then
+                      ' do nothing
+                      else                      
+                          SendString pos, 2, lat
+                          SendString pos, 11, lng
+                          If todayOnly = "R" and partMatch = "P" Then
+                              SendString pos, 23, "C"
+                          else
+                            If todayOnly = "R" Then
+                              SendString pos, 23, todayOnly
+                            else
+                              SendString pos, 23, partMatch
+                            End If
+                          End If
+                      End If    
+                 else
+                    todayOnly = "I"
+                    SendString pos, 23, todayOnly 
+                 End If 
+              End If  
+       End If          
+    
+    Next
+
+    msgbox "Geocoding Operation Completed"
+ ''   For pos = 6 to 21
+ ''       SendString pos, 21, " "
+ ''  Next
+    
+ else
+   msgbox "Macro runs for 'RCHT - 3. CORRECT GEOCODES' screen only"
+ End If
+
+End Sub
+

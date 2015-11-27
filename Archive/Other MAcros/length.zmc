@@ -1,0 +1,9 @@
+Sub Zmain()
+
+a= -4
+
+b = len(a)
+
+msgbox b
+
+End Sub  

@@ -1,0 +1,225 @@
+Sub ZMain()
+
+Dim BaseURL,AddressURL,FinalURL,key,xmlRequest,xmlData
+Dim Address2,AddressLine,City,State,Zipcode,stat,lat,lng,ut,usagetypeD
+Dim confstrt,confend,conf,mcstrt,mcend,mc,update_latlong, stat1
+
+
+If GetString(1,3,12) = "NEWC BL360AO" Then
+
+	BaseURL="http://dev.virtualearth.net/REST/v1/Locations/US/"
+
+	key="?o=xml&key=Atvh3yWGZroEGuvrZilpk4ctXJ2qOnNava4wsmd8Rz92ncOgeZcJ4_Ue0QKBCHB1"
+
+''Ambiguous Address
+Address2 = UCase("148th Ave")
+City= UCase("Bellevue")
+State= UCase("WA")
+ZipCode= UCase("98007")
+''Good Address
+'Address2 = UCase("1 Microsoft Way")
+'City= UCase("Redmond")
+'State= UCase("WA")
+'ZipCode= UCase("98052")
+''Address input from screen
+'Address2 = Trim(GetString (15,11,25))
+'AddressLine = Replace(Address2," ","%20")
+'City = Trim(GetString (16,11,25))
+'State = Trim(GetString (16,37,2))
+'ZipCode = Trim(GetString (16,40,5))
+
+	AddressURL= State+"/"+Zipcode+"/"+City+"/"+AddressLine
+
+	FinalURL = BaseURL+AddressURL+key
+
+	'msgbox FinalURL
+
+	Set xmlRequest = CreateObject("MSXML2.XMLHTTP")
+    xmlRequest.open "GET", FinalURL, False
+    xmlRequest.send
+          
+    ' If the connection is GOOD then only fetch data
+    If xmlRequest.Status = 200 Then
+		xmlData = xmlRequest.responseText
+
+		Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+		objXMLDoc.async = false
+		objXMLDoc.loadXML(xmlData)
+		'objXMLDoc.Save "C:\Users\Rohan Dua\Desktop\test.xml"
+
+		Set Root = objXMLDoc.documentElement
+		Set sd = Root.getElementsByTagName("StatusDescription")(0)
+
+		'msgbox sd.text
+
+		If sd.text = "OK" Then
+			
+	        	
+	        set conf = Root.getElementsByTagName("Confidence")(0)
+	        set mc = Root.getElementsByTagName("MatchCode")(0)
+	        
+	        msgbox mc.text+"-"+conf.text	
+
+	        Select Case mc.text
+	        Case "Good"
+	        	Select Case conf.text
+		        Case "High" 
+		           call fetchLatLng(xmlData)
+		           rcvalid=1
+	    	    Case "Medium" 	
+	    	    	call fetchLatLng(xmlData) 
+	    	       rcvalid=1 	
+				End Select
+	        Case "Ambiguous"
+        		Select Case conf.text
+    	    	Case "Medium" 	
+    	    		call fetchAddresses(xmlData)
+    	    		'call fetchLatLng(xmlData)
+    	    		rcvalid=1
+        		Case "Low" 	
+					 rcvalid=0	
+				End Select
+	        Case "UpHierarchy"
+        		Select Case conf.text
+    	    	Case "Medium" 	
+    	    		call fetchAddresses(xmlData)
+    	    		rcvalid=1
+        		Case "Low" 	
+					 rcvalid=0		
+				End Select	 	
+	        End Select  
+            
+            If rcvalid = 0 Then
+            	msgbox "Bing wasn't able to fetch the exact address."
+            End If
+        End If
+    End If     
+Else
+   msgbox "Not CUSTOMER Coding screen"
+End If
+
+End Sub
+
+Function fetchLatLng(xmlData)
+
+			Dim disp2(5)
+			Dim lat1(5)
+			Dim lng1(5)
+			Dim Maindisp,disp1,respno
+
+			'dim list
+            'Set list = CreateObject("System.Collections.ArrayList")
+
+			Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+			objXMLDoc.async = false
+			objXMLDoc.loadXML(xmlData)
+			
+			Set Root = objXMLDoc.documentElement
+			Set NodeList = Root.getElementsByTagName("GeocodePoint")
+
+			
+
+			'list = NodeList.Elements("UsageType").ToList()
+			'respno = Ubound(list)
+			'IF respno = 2 Then
+			'msgbox "We have same route and display"
+			'End If
+
+			For Each Elem In NodeList
+
+			set lat = Elem.getElementsByTagName("Latitude")(0)
+			set lng = Elem.getElementsByTagName("Longitude")(0)
+			set ut =  Elem.getElementsByTagName("UsageType")(0)
+			
+			latRoff=Round(lat.text,5)
+            lngRoff=Round(lng.text,5)
+			utD = ut.text
+			
+			 IF utD = "Display" Then
+			 resp = x
+			 End If
+			
+			 lat1(x)= latRoff
+			 lng1(x)= lngRoff
+            x=x+1    
+			Next
+
+            call LatLongUpdate(lat1(resp),lng1(resp))   
+            
+End Function
+
+Function LatLongUpdate(lat,lng)
+
+call CleanStringZip()
+
+Dim update_latlong
+
+update_latlong= msgbox("The Latitude ="+lat+" Longitude = "+lng+" Do you want to update the Lat/Long's?", vbYesNo, "Yes No Example")
+
+lng="0"+CStr(-lng)
+
+Select Case update_latlong
+Case vbYes
+ SendString 18,21,lat
+ SendString 19,22,lng
+ msgbox "The Lat Longs have been Entered."
+case vbNo
+ 'donothing
+END Select
+
+End Function
+
+Function CleanStringZip()
+ SendString 18,21,Space(10)
+ SendString 19,22,Space(10)
+End Function
+
+Function fetchAddresses(xmlData)
+
+            Dim Addresses
+			Set objXMLDoc  = CreateObject("Microsoft.XMLDOM")
+			objXMLDoc.async = false
+			objXMLDoc.loadXML(xmlData)
+			
+			Set Root = objXMLDoc.documentElement
+			Set NodeList = Root.getElementsByTagName("Location")
+
+            Dim Address(10)
+            Dim lat(10)
+            Dim lng(10)
+
+			For Each Elem In NodeList
+
+			
+			set Name = Elem.getElementsByTagName("Name")(0)
+			set lat1 = Elem.getElementsByTagName("Latitude")(0)
+			set lng1 = Elem.getElementsByTagName("Longitude")(0)
+
+
+			Address(x) = Name.text
+			lat(x)=lat1.text
+			lng(x)=lng1.text
+			'call LatLongUpdate(lat.text,lng.text,ut.text)
+			
+			y=Left(x+1,1)            
+            Addresses = Addresses+"Address "+y+": "+Address(x)& vbNewline
+
+
+			disp_box= "Below are the multiple address option to choose from, Please Enter your choice-"&vbNewline +Addresses
+
+            x=x+1    
+			Next
+
+	        resp = InputBox(disp_box,"Enter Value")
+            
+            resp1=CInt(resp)
+            
+            IF resp1 > x  Then
+                 msgbox "Invalid Entry.Press OK to redirect."
+                 fetchAddresses(xmlData)
+            Else
+                 call LatLongUpdate(lat(resp-1),lng(resp-1))
+            End If      
+             
+
+End Function

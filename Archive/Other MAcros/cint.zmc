@@ -1,0 +1,31 @@
+Sub Zmain()
+
+a= 2.1
+b= 2.9
+
+c=int(a)
+d=int(b)
+MsgBox("The Address is a perfect match. Do you want to update the Lat/Long's?", vbYesNo, "Yes No Example", 5120, 3840)
+
+msgbox c,"",,,1,1
+
+msgbox d
+disp_box= "Please enter the serial no. you would like to proceed with-"
+
+resp = InputBox(disp_box,"Address Verification")
+
+msgbox "TypeName" + TypeName(resp)
+
+If TypeName(resp) = EMPTY Then
+	Exit Sub
+Else IF resp="" or resp="0" or isNumeric(resp) = false Then
+	msgbox "Please make a valid selection"
+	call Zmain()	
+Else
+	'resp=CInt(resp)
+    msgbox "This is a valid selection." + resp    
+End If 
+End If 
+
+
+End Sub
