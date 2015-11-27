@@ -1,5 +1,5 @@
 Sub ZMain()
-
+'macro v_25
   Dim CustomerName, Address2, City, State,LicenseKey ,responseText1, ZipCode, Address_disp ,Coordinates,update_latlong,update_geolocation,update_address,MyArray,Latitude,Longitude,addr
   Dim xmlRequest,Addresses,xmlData, rcstrt, rcend, rc, ret, operator, statestrt, stateend, State_n, addrstrt, addrend, Address2_n, citystrt, cityend, City_n,zipstrt,zipend,Zipcode_n 
   Dim AddressURLbing,AddressLineBing, AddressURLgoogle,AddressLineGoogle,rcupdate      
