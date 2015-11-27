@@ -456,7 +456,8 @@ Function caseMultiple(xmlData,Address2_n,City_n,State_n,Zipcode_n1,Zipcode_n2,Ad
       'msgbox "PREFERRED: "& Address2_n&" "&Zipcode_n1 & " Before Change: "&aDDRESS_TEMP&" AFTER Change: "& Address_comp(x)
     
     'Check 1 - Elminates the Range interpolated Address if any  
-    IF Cint(primaryHigh(x)) <> Cint(primaryLow(x)) Then
+    'IF Cint(primaryHigh(x)) <> Cint(primaryLow(x)) Then
+    IF primaryHigh(x) <> primaryLow(x) Then
       ' do nothing
       'msgbox "address" & x & "elminated- RANGE_INTERPOLATED"
     else
