@@ -1,5 +1,7 @@
 Sub ZMain()
   Const WAIT_SECONDS = 2
+  Const WAIT_SECONDS1 = 1
+  Const WAIT_SECONDS3 = 3
   Const DELIMITER = "^!?"
   ' Allocating the local variables for this PASSPORT macro
   Dim n_screen_size_return_value, screen_name
@@ -28,6 +30,8 @@ Sub ZMain()
   clin_email = clin_email&"Claim Number"&DELIMITER&Trim(GetString(2,46,5))&" "&DELIMITER
   clin_email = clin_email&"Claim Amount"&DELIMITER&Trim(GetString(4,65,14))&" "&DELIMITER
 
+  shipper_code = GetString(8,16,7)
+
   ack_sent = Trim(GetString(11,45,8))
 
   If ack_sent <> "" Then
@@ -43,9 +47,35 @@ Sub ZMain()
   clin_email = clin_email&"ORIG"&DELIMITER&Trim(GetString(4,43,9))&" "&DELIMITER
   clin_email = clin_email&"DEST"&DELIMITER&Trim(GetString(5,43,9))&" "&DELIMITER
 
+  trans = "CLCU"
+  
+  SendHostKeys "<PF3>"
+  Wait WAIT_SECONDS1
+  Sendstring 1,1,trans
+  SendHostKeys "<Enter>"
+  Wait WAIT_SECONDS1
+  SendString 4,20,shipper_code
+  SendHostKeys "<Enter>"
+  Wait WAIT_SECONDS1
+  pay_comments = GetString(15,3,74)
+
+  clin_email = clin_email&"Payment Comments"&DELIMITER&Trim(GetString(4,65,14))&" "&DELIMITER
+
 ' Send email with the info
   sendEmail( Array(Trim(GetString(3,44,8))&":CLIN",clin_email))
+  
+  trans1 =  "CLIN" 
+  SendHostKeys "<PF3>"
+  Wait WAIT_SECONDS1
+  Sendstring 1,1,trans1
+  Wait WAIT_SECONDS1
+  Sendstring 14,50,"1"
+  SendHostKeys "<Enter>"
+  Wait WAIT_SECONDS1
+
   msgbox "Email sent"
+
+
 End Sub
 
 ' ****Function*****
@@ -99,7 +129,8 @@ Function sendEmail(emailInfo)
   EmailBody = emailInfo(1)
   Const EmailFrom = "wilsontruckingcorp@shjintl.com"
   Const EmailFromName = "Wilson Trucking Corp"
-  Const EmailTo = "claims@wilsontrucking.com"
+  'Const EmailTo = "claims@wilsontrucking.com"
+  Const EmailTo = "rohand@shjintl.com"
   Const SMTPServer = "smtp.gmail.com"
   Const SMTPLogon = "wilsontruckingcorp@shjintl.com"
   Const SMTPPassword = "wilson39"
